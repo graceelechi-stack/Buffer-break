@@ -17,8 +17,39 @@ description still says what it really does.
 
 ---
 
+## Why I built it
+
+It started on a Tuesday. I'd been staring at the same Figma frame for three
+hours. My neck had locked into a permanent "designer hunch," my coffee had gone
+cold, and my eyes were starting to see in 8px grids.
+
+I wanted to stand up and stretch. Just two minutes. But the boss was doing
+laps, and an empty chair at the wrong moment says "not working" louder than any
+status update ever could.
+
+Then I had a thought: what if the computer took the blame?
+
+Everyone has watched a browser freeze. Nobody questions it. You just sigh and
+wait. So I built **Buffer Break**. One shortcut, and my screen locks up with a
+perfectly believable "Page Unresponsive" message. To the world, Chrome is
+having a moment. To me, it's time to roll my shoulders, refill my water, and
+remember I have legs.
+
+Is it the most productive thing I've ever made? Arguably, yes. My back feels
+better, my eyes get a break from the glare, and science says short breaks
+improve focus. So technically, this is a productivity tool. That's what the
+name says, anyway.
+
+You'll use it too. Maybe not today, but on that long afternoon when your spine
+starts filing complaints, you'll remember: **Alt + Shift + F.**
+
+Stretch, sip, scroll. We'll blame the browser. 😉
+
+---
+
 ## Contents
 
+- [Why I built it](#why-i-built-it)
 - [What it does](#what-it-does)
 - [Install (about 2 minutes)](#install-about-2-minutes)
 - [How to use it](#how-to-use-it)
