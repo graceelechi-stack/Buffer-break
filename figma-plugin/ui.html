@@ -1,0 +1,482 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font: 12px/1.45 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--figma-color-text, #1e1e1e);
+    background: var(--figma-color-bg, #fff);
+  }
+
+  /* ---------- Launcher ---------- */
+  #launcher { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  #launcher h1 { margin: 0; font-size: 13px; font-weight: 600; }
+  #launcher p { margin: 0; color: var(--figma-color-text-secondary, #666); }
+  .option { display: flex; align-items: center; gap: 8px; }
+  .option input[type="number"], .option select {
+    padding: 4px 6px; font: inherit; color: inherit;
+    background: var(--figma-color-bg-secondary, #f5f5f5);
+    border: 1px solid var(--figma-color-border, #e6e6e6); border-radius: 4px;
+  }
+  .option input[type="number"] { width: 56px; }
+  .option select { flex: 1; }
+  kbd {
+    padding: 1px 4px; font: 11px ui-monospace, monospace;
+    border: 1px solid var(--figma-color-border, #e6e6e6); border-radius: 3px;
+  }
+  #start {
+    margin-top: 4px; padding: 8px; font: inherit; font-weight: 600; cursor: pointer;
+    color: var(--figma-color-text-onbrand, #fff);
+    background: var(--figma-color-bg-brand, #0d99ff);
+    border: 0; border-radius: 6px;
+  }
+  #start:disabled { opacity: .6; cursor: default; }
+  #error { color: var(--figma-color-text-danger, #f24822); }
+  .link {
+    padding: 0; font: inherit; cursor: pointer; background: none; border: 0;
+    color: var(--figma-color-text-secondary, #666); text-decoration: underline;
+  }
+
+  /* Coverage test report */
+  #report {
+    position: fixed; inset: 0; overflow: auto; padding: 24px;
+    display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
+    background: repeating-linear-gradient(45deg, #fff6d6 0 20px, #fff 20px 40px);
+    color: #1e1e1e; border: 6px solid #f24822;
+  }
+  #report h1 { margin: 0; font-size: 16px; }
+  #report p { margin: 0; max-width: 520px; }
+  #report table { border-collapse: collapse; background: #fff; }
+  #report td { padding: 4px 12px; border: 1px solid #ddd; }
+  #report button { padding: 6px 12px; font: inherit; cursor: pointer; }
+
+  /* Transparency test */
+  html.glass, html.glass body { background: transparent !important; }
+  #glass { position: fixed; inset: 0; display: grid; place-items: center; }
+  .glass-note {
+    width: 340px; padding: 16px; display: flex; flex-direction: column; gap: 8px;
+    color: #1e1e1e; background: #fff; border: 3px solid #f24822; border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .25);
+  }
+  .glass-note p { margin: 0; }
+  .glass-note button { align-self: flex-start; padding: 6px 12px; font: inherit; cursor: pointer; }
+
+  /* ---------- Frozen stage ---------- */
+  #stage { position: fixed; inset: 0; cursor: default; user-select: none; }
+  #stage[data-style="windows-app"] { cursor: wait; }
+  #stage[data-style="mac-app"] {
+    /* macOS spinning wait cursor */
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cdefs%3E%3CclipPath id='c'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/clipPath%3E%3C/defs%3E%3Cg clip-path='url(%23c)'%3E%3Cpath d='M12 12 12 0 24 0z' fill='%23ff3b30'/%3E%3Cpath d='M12 12 24 0 24 12z' fill='%23ff9500'/%3E%3Cpath d='M12 12 24 12 24 24z' fill='%23ffcc00'/%3E%3Cpath d='M12 12 24 24 12 24z' fill='%2334c759'/%3E%3Cpath d='M12 12 12 24 0 24z' fill='%2300c7be'/%3E%3Cpath d='M12 12 0 24 0 12z' fill='%23007aff'/%3E%3Cpath d='M12 12 0 12 0 0z' fill='%235856d6'/%3E%3Cpath d='M12 12 0 0 12 0z' fill='%23af52de'/%3E%3C/g%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='%23000' stroke-opacity='.35'/%3E%3C/svg%3E") 12 12, wait;
+  }
+  #snapshot { position: absolute; top: 0; left: 0; }
+  #haze {
+    position: absolute; inset: 0; background: #fff; opacity: 0;
+    transition: opacity 5s ease-in;
+  }
+  /* Only Windows "ghosts" a hung window to white. */
+  #stage.ghosted[data-style="windows-app"] #haze { opacity: .4; }
+
+  .dialog { position: absolute; }
+  .dialog button { font: inherit; cursor: inherit; }
+
+  /* Windows desktop app */
+  .dlg-windows {
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 440px; max-width: calc(100% - 32px);
+    font-family: "Segoe UI", system-ui, sans-serif; color: #1b1b1b;
+    background: #fff; border: 1px solid #b9b9b9;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .28);
+  }
+  .dlg-windows .titlebar {
+    display: flex; justify-content: space-between; align-items: center;
+    height: 30px; padding-left: 10px; font-size: 12px;
+  }
+  .dlg-windows .titlebar span:last-child { width: 46px; text-align: center; font-size: 14px; }
+  .dlg-windows .body { padding: 10px 22px 22px; }
+  .dlg-windows h2 { margin: 0 0 6px; font-size: 16px; font-weight: 400; color: #003399; }
+  .dlg-windows .body > p { margin: 0 0 16px; font-size: 12px; }
+  .dlg-windows .command {
+    display: flex; gap: 10px; align-items: baseline;
+    padding: 8px 10px; font-size: 13px; color: #151c55; border: 1px solid transparent;
+  }
+  .dlg-windows .command:hover { background: #f2f7fd; border-color: #cce4f7; }
+  .dlg-windows .command b { color: #4a8f3a; font-weight: 400; }
+
+  /* macOS alert (desktop app + Safari) */
+  .dlg-mac {
+    --mac-bg: rgba(236, 236, 236, .94); --mac-text: #1d1d1f; --mac-sub: #3c3c43;
+    --mac-btn: #fff; --mac-btn-text: #1d1d1f;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 260px; padding: 20px 16px 16px; text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    color: var(--mac-text); background: var(--mac-bg);
+    -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
+    border-radius: 12px; border: .5px solid rgba(0, 0, 0, .15);
+    box-shadow: 0 0 0 .5px rgba(0, 0, 0, .1), 0 20px 50px rgba(0, 0, 0, .35);
+  }
+  .dlg-mac .icon {
+    width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 13px;
+    display: grid; place-items: center; font-size: 30px; color: #fff;
+  }
+  .dlg-mac h2 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+  .dlg-mac p { margin: 0 0 16px; font-size: 11px; color: var(--mac-sub); }
+  .dlg-mac .buttons { display: flex; gap: 8px; }
+  .dlg-mac button {
+    flex: 1; height: 28px; font-size: 13px; border-radius: 6px; border: 0;
+    color: var(--mac-btn-text); background: var(--mac-btn);
+    box-shadow: 0 0 0 .5px rgba(0, 0, 0, .15), 0 1px 1px rgba(0, 0, 0, .1);
+  }
+  .dlg-mac button.primary { color: #fff; background: #007aff; box-shadow: none; }
+
+  /* Chrome "Page Unresponsive" */
+  .dlg-chrome {
+    --c-bg: #fff; --c-title: #1f1f1f; --c-text: #474747;
+    --c-primary: #0b57d0; --c-on-primary: #fff; --c-outline: #747775;
+    top: 16px; left: 50%; transform: translateX(-50%);
+    width: 420px; max-width: calc(100% - 32px); padding: 24px;
+    font-family: "Google Sans", Roboto, "Segoe UI", system-ui, sans-serif;
+    background: var(--c-bg); border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .3), 0 4px 8px 3px rgba(0, 0, 0, .15);
+  }
+  .dlg-chrome h2 { margin: 0 0 12px; font-size: 15px; font-weight: 500; color: var(--c-title); }
+  .dlg-chrome p { margin: 0 0 24px; font-size: 13px; color: var(--c-text); }
+  .dlg-chrome .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+  .dlg-chrome button {
+    height: 36px; padding: 0 16px; font-size: 13px; font-weight: 500; border-radius: 18px;
+    color: var(--c-primary); background: transparent; border: 1px solid var(--c-outline);
+  }
+  .dlg-chrome button.primary { color: var(--c-on-primary); background: var(--c-primary); border-color: var(--c-primary); }
+
+  /* Edge "Page unresponsive" */
+  .dlg-edge {
+    --e-bg: #fff; --e-text: #242424; --e-sub: #424242;
+    --e-primary: #0f6cbd; --e-on-primary: #fff; --e-border: #d1d1d1;
+    top: 16px; left: 50%; transform: translateX(-50%);
+    width: 440px; max-width: calc(100% - 32px); padding: 24px;
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    color: var(--e-text); background: var(--e-bg); border-radius: 8px;
+    box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 32px 64px rgba(0, 0, 0, .14);
+  }
+  .dlg-edge h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+  .dlg-edge p { margin: 0 0 24px; font-size: 14px; color: var(--e-sub); }
+  .dlg-edge .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+  .dlg-edge button {
+    min-width: 96px; height: 32px; padding: 0 12px; font-size: 14px; font-weight: 600;
+    border-radius: 4px; color: var(--e-text); background: var(--e-bg); border: 1px solid var(--e-border);
+  }
+  .dlg-edge button.primary { color: var(--e-on-primary); background: var(--e-primary); border-color: var(--e-primary); }
+
+  /* Firefox notification bar */
+  .dlg-firefox {
+    --f-bg: #f0f0f4; --f-text: #15141a; --f-btn: #e0e0e6; --f-icon: #0060df;
+    top: 0; left: 0; right: 0;
+    display: flex; align-items: center; gap: 10px;
+    min-height: 40px; padding: 4px 8px 4px 12px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px;
+    color: var(--f-text); background: var(--f-bg);
+    border-bottom: 1px solid rgba(0, 0, 0, .1);
+  }
+  .dlg-firefox .icon {
+    width: 16px; height: 16px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font: 700 11px/1 serif; color: var(--f-bg); background: var(--f-icon);
+  }
+  .dlg-firefox span.text { flex: 1; }
+  .dlg-firefox button {
+    height: 28px; padding: 0 12px; font-size: 13px; font-weight: 600;
+    color: var(--f-text); background: var(--f-btn); border: 0; border-radius: 4px;
+  }
+  .dlg-firefox button.close { width: 28px; padding: 0; font-weight: 400; background: transparent; }
+
+  /* Browser dialogs follow the system theme. */
+  @media (prefers-color-scheme: dark) {
+    .dlg-mac { --mac-bg: rgba(40, 40, 40, .9); --mac-text: #f5f5f7; --mac-sub: #c7c7cc; --mac-btn: #5a5a5c; --mac-btn-text: #f5f5f7; }
+    .dlg-chrome { --c-bg: #2d2e31; --c-title: #e3e3e3; --c-text: #c4c7c5; --c-primary: #a8c7fa; --c-on-primary: #062e6f; --c-outline: #8e918f; }
+    .dlg-edge { --e-bg: #292929; --e-text: #fff; --e-sub: #d6d6d6; --e-primary: #479ef5; --e-on-primary: #000; --e-border: #666; }
+    .dlg-firefox { --f-bg: #42414d; --f-text: #fbfbfe; --f-btn: #5b5b66; --f-icon: #80ebff; }
+  }
+</style>
+</head>
+<body>
+  <section id="launcher">
+    <h1>Buffer Break</h1>
+    <p>Freezes the canvas with a fake "not responding" message.</p>
+    <label class="option"><input type="radio" name="mode" value="manual" checked> Until I unfreeze it</label>
+    <label class="option">
+      <input type="radio" name="mode" value="timed" id="timed"> For
+      <input type="number" id="minutes" min="1" max="240" value="10"> minutes
+    </label>
+    <label class="option">Message
+      <select id="style">
+        <option value="auto" id="auto-option">Auto</option>
+        <option value="windows-app">Figma app on Windows</option>
+        <option value="mac-app">Figma app on Mac</option>
+        <option value="chrome">Chrome</option>
+        <option value="edge">Edge</option>
+        <option value="firefox">Firefox</option>
+        <option value="safari">Safari</option>
+      </select>
+    </label>
+    <p>Unfreeze any time: <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd></p>
+    <p id="error" hidden></p>
+    <button id="start">Freeze</button>
+    <button id="probe" class="link">Test coverage</button>
+    <button id="glass-test" class="link">Test transparency</button>
+  </section>
+
+  <section id="glass" hidden>
+    <div class="glass-note">
+      <b>Transparency test</b>
+      <p>This window now covers the canvas with a see-through background.
+        If you can see your design around this box, transparency works.
+        If everything around it is solid white or grey, it doesn't.</p>
+      <p>Also try clicking a frame outside this box: it should <i>not</i> get selected.</p>
+      <button id="close-glass">Close</button>
+    </div>
+  </section>
+
+  <section id="report" hidden>
+    <h1>Coverage test</h1>
+    <p>This window asked Figma to be as big as your screen, pushed to the top-left.
+      Take a screenshot of the whole Figma window now so we can see where it ended up.</p>
+    <table id="report-table"></table>
+    <p>
+      <button id="try-capture">Try screen capture</button>
+      <button id="close-report">Close</button>
+    </p>
+  </section>
+
+  <section id="stage" hidden>
+    <canvas id="snapshot"></canvas>
+    <div id="haze"></div>
+
+    <div class="dialog dlg-windows" data-style="windows-app" hidden>
+      <div class="titlebar"><span>Figma</span><span>✕</span></div>
+      <div class="body">
+        <h2>Figma is not responding</h2>
+        <p>If you close the program, you might lose information.</p>
+        <div class="command"><b>→</b> Close the program</div>
+        <div class="command"><b>→</b> Wait for the program to respond</div>
+      </div>
+    </div>
+
+    <div class="dialog dlg-mac" data-style="mac-app" hidden>
+      <div class="icon" style="background: linear-gradient(#5f5f64, #2c2c2e)">!</div>
+      <h2>“Figma” is not responding.</h2>
+      <p>You can wait for it to respond, or force quit it. Any unsaved changes will be lost.</p>
+      <div class="buttons"><button>Force Quit</button><button class="primary">Wait</button></div>
+    </div>
+
+    <div class="dialog dlg-mac" data-style="safari" hidden>
+      <div class="icon" style="background: linear-gradient(#4fb3ff, #0a64d6)">!</div>
+      <h2>This webpage is not responding.</h2>
+      <p>Closing the page may resolve the issue. You can also wait for it to respond.</p>
+      <div class="buttons"><button>Close Page</button><button class="primary">Wait</button></div>
+    </div>
+
+    <div class="dialog dlg-chrome" data-style="chrome" hidden>
+      <h2>Page Unresponsive</h2>
+      <p>You can wait for it to become responsive or exit the page.</p>
+      <div class="buttons"><button>Exit page</button><button class="primary">Wait</button></div>
+    </div>
+
+    <div class="dialog dlg-edge" data-style="edge" hidden>
+      <h2>Page unresponsive</h2>
+      <p>You can wait for it to become responsive or exit the page.</p>
+      <div class="buttons"><button class="primary">Exit page</button><button>Wait</button></div>
+    </div>
+
+    <div class="dialog dlg-firefox" data-style="firefox" hidden>
+      <span class="icon">i</span>
+      <span class="text">This page is slowing down Firefox. To speed up your browser, stop this page.</span>
+      <button>Stop</button>
+      <button class="close" aria-label="Close">✕</button>
+    </div>
+  </section>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const post = (msg) => parent.postMessage({ pluginMessage: msg }, '*');
+  const isUnfreezeCombo = (e) => e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyB';
+
+  const GHOST_DELAY_MS = 1500;
+  const DIALOG_DELAY_MS = 4000;
+  const STYLE_NAMES = {
+    'windows-app': 'Figma app on Windows',
+    'mac-app': 'Figma app on Mac',
+    chrome: 'Chrome',
+    edge: 'Edge',
+    firefox: 'Firefox',
+    safari: 'Safari',
+  };
+
+  // Work out where Figma is running so the message matches the real thing.
+  // The desktop app is Electron, so check for it before the Chrome check.
+  function detectStyle() {
+    const ua = navigator.userAgent;
+    const mac = /Macintosh|Mac OS X/.test(ua);
+    if (/Figma|Electron/.test(ua)) return mac ? 'mac-app' : 'windows-app';
+    if (/Edg\//.test(ua)) return 'edge';
+    if (/Firefox\//.test(ua)) return 'firefox';
+    if (/Chrome\/|CriOS\//.test(ua)) return 'chrome';
+    if (/Safari\//.test(ua)) return 'safari';
+    return mac ? 'mac-app' : 'windows-app';
+  }
+
+  const detectedStyle = detectStyle();
+  $('auto-option').textContent = `Auto (${STYLE_NAMES[detectedStyle]})`;
+
+  let frozen = false;
+  let timers = [];
+
+  $('minutes').addEventListener('focus', () => { $('timed').checked = true; });
+
+  $('start').addEventListener('click', () => {
+    const timed = $('timed').checked;
+    const minutes = timed ? Math.min(240, Math.max(1, Number($('minutes').value) || 10)) : 0;
+    $('error').hidden = true;
+    $('start').disabled = true;
+    $('start').textContent = 'Freezing…';
+    post({ type: 'start', minutes });
+  });
+
+  window.onmessage = async (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg) return;
+    if (msg.type === 'snapshot') {
+      await freeze(msg.snapshot, msg.minutes);
+    } else if (msg.type === 'probed') {
+      // Give Figma a moment to apply the resize before measuring.
+      setTimeout(() => showReport(msg), 400);
+    } else if (msg.type === 'error') {
+      $('error').textContent = 'Could not capture the canvas: ' + msg.message;
+      $('error').hidden = false;
+      $('start').disabled = false;
+      $('start').textContent = 'Freeze';
+    }
+  };
+
+  async function freeze(snap, minutes) {
+    const width = Math.round(snap.bounds.width * snap.zoom);
+    const height = Math.round(snap.bounds.height * snap.zoom);
+    const dpr = window.devicePixelRatio || 1;
+
+    const canvas = $('snapshot');
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = snap.background;
+    ctx.fillRect(0, 0, width, height);
+
+    for (const img of snap.images) {
+      const bitmap = await createImageBitmap(new Blob([img.bytes], { type: 'image/png' }));
+      ctx.drawImage(
+        bitmap,
+        (img.x - snap.bounds.x) * snap.zoom,
+        (img.y - snap.bounds.y) * snap.zoom,
+        img.width * snap.zoom,
+        img.height * snap.zoom
+      );
+      bitmap.close();
+    }
+    // Drop the raw PNG bytes as soon as they're painted.
+    snap.images.length = 0;
+
+    const style = $('style').value === 'auto' ? detectedStyle : $('style').value;
+    const stage = $('stage');
+    stage.dataset.style = style;
+    const dialog = stage.querySelector(`.dialog[data-style="${style}"]`);
+
+    $('launcher').hidden = true;
+    stage.hidden = false;
+    frozen = true;
+    window.focus();
+    post({ type: 'ready' });
+
+    timers.push(setTimeout(() => stage.classList.add('ghosted'), GHOST_DELAY_MS));
+    timers.push(setTimeout(() => { dialog.hidden = false; }, DIALOG_DELAY_MS));
+    if (minutes) timers.push(setTimeout(unfreeze, minutes * 60 * 1000));
+  }
+
+  $('probe').addEventListener('click', () => {
+    $('launcher').hidden = true;
+    $('report').hidden = false;
+    post({ type: 'probe', width: screen.width, height: screen.height });
+  });
+
+  const reportRows = [];
+  function addReportRow(label, value) {
+    reportRows.push([label, value]);
+    $('report-table').innerHTML = reportRows
+      .map(([l, v]) => `<tr><td>${l}</td><td><b>${v}</b></td></tr>`).join('');
+  }
+
+  function showReport(msg) {
+    const policy = document.featurePolicy || document.permissionsPolicy;
+    const captureAllowed = policy && policy.allowsFeature
+      ? (policy.allowsFeature('display-capture') ? 'yes' : 'no')
+      : 'unknown';
+    addReportRow('Screen size', `${screen.width} × ${screen.height}`);
+    addReportRow('Window size asked for', `${msg.requested.width} × ${msg.requested.height}`);
+    addReportRow('Window size Figma allowed', `${window.innerWidth} × ${window.innerHeight}`);
+    addReportRow('Visible canvas size', `${msg.canvas.width} × ${msg.canvas.height}`);
+    addReportRow('Screen capture allowed by Figma', captureAllowed);
+    addReportRow('Detected', STYLE_NAMES[detectedStyle]);
+  }
+
+  $('try-capture').addEventListener('click', async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const settings = stream.getVideoTracks()[0].getSettings();
+      stream.getTracks().forEach((t) => t.stop()); // nothing is kept
+      addReportRow('Screen capture test', `worked (${settings.width} × ${settings.height})`);
+    } catch (e) {
+      addReportRow('Screen capture test', `failed: ${e.name}: ${e.message}`);
+    }
+  });
+
+  $('close-report').addEventListener('click', () => post({ type: 'done' }));
+
+  $('glass-test').addEventListener('click', () => {
+    document.documentElement.classList.add('glass');
+    $('launcher').hidden = true;
+    $('glass').hidden = false;
+    post({ type: 'cover' });
+  });
+
+  $('close-glass').addEventListener('click', () => post({ type: 'done' }));
+
+  function unfreeze() {
+    if (!frozen) return;
+    frozen = false;
+    timers.forEach(clearTimeout);
+    timers = [];
+
+    // Wipe the snapshot pixels before closing.
+    const canvas = $('snapshot');
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    canvas.width = 0;
+    canvas.height = 0;
+
+    post({ type: 'done' });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (!frozen) return;
+    // Swallow every key while frozen so nothing reacts; only the combo escapes.
+    e.preventDefault();
+    e.stopPropagation();
+    if (isUnfreezeCombo(e)) unfreeze();
+  }, true);
+
+  window.addEventListener('contextmenu', (e) => { if (frozen) e.preventDefault(); });
+</script>
+</body>
+</html>
